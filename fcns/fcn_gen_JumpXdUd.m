@@ -4,26 +4,26 @@ addpath('../arclab-quad-sdk/nmpc_controller/scripts/utils/casadi-windows/')
 import casadi.*
 %% parameters
 
-plan_steps = 40;
-plan_time_horizon = 0.8;
+plan_steps = p.plan_steps;
+plan_time_horizon = p.plan_time_horizon;
 dt_steps = repmat(plan_time_horizon/(plan_steps),1,plan_steps);
 max_force_z = 128;
 max_jump_z=0.8; 
 min_position_z=0.15;
-max_jump_speed_z=8.5;
+max_jump_speed_z=3.5;
 position_z_init=0.2; 
 number_of_legs = 4;
 world.mu=p.mu;
 
 q_init_value = [0 0 0 0 0 position_z_init]'; % rpy  xyz
 qd_init_value = [0 0 0 0 0 0]';
-q_final_reference_value  = [1*pi*0, -22/57.3*0, pi*0, 0.4+1e-5, 0, 0.1]';
+q_final_reference_value  = [1*pi*0, -22/57.3*0, pi*0, 0.2+1e-5, 0, 0.2]';
 qd_final_reference_value = [0 0 0, 0 0 0]';
 
-contact_states_value = [repmat([1 1 1 1]', 1, plan_steps * 0.3) ...
+contact_states_value = [repmat([1 1 1 1]', 1, plan_steps * 0.1) ...
     repmat([1 1 1 1]', 1, plan_steps * 0.2)  ...
-    repmat([0 0 0 0]', 1, plan_steps * 0.45) ...
-    repmat([0 0 0 0]', 1, plan_steps * 0.05)]'; % predefined 
+    repmat([0 0 0 0]', 1, plan_steps * 0.65) ...
+    repmat([1 1 1 1]', 1, plan_steps * 0.05)]'; % predefined 
 
 weight.Q_states = [10 10 10, 10 10 10, 10 10 10, 10 10 10 ]'; 
 weight.Q_final_state = [10 10 10, 50 50 150, 10 10 10, 10 10 10 ]';
@@ -172,7 +172,7 @@ end
 % 约束生成
 g=[defect_init;defect_state;defect_FootOnGround;defect_footStance;...
     defect_legLimits;defect_footforce;defect_ForceNormal;defect_footswing];
-display_str=['number of equal constraints: ',num2str(number_of_equation_constraints),'number of inequal constraints: ',num2str(number_of_inequation_constraints)];
+display_str=['number of equal constraints: ',num2str(number_of_equation_constraints),' number of inequal constraints: ',num2str(number_of_inequation_constraints)];
 disp(display_str);
 % 终端 cost
 error_states_X = states_X(:,end)-reference_states_X(:,end);
@@ -280,49 +280,49 @@ r_li=sol.x(number_of_states*(plan_steps+1)+number_of_control_inputs*plan_steps+1
 r_li=reshape(full(r_li),number_of_control_inputs,plan_steps); % com_to_foot_world_frame
 p_li=r_li+repmat(x_li(4:6,1:end-1),4,1); % foot_position_world_frame
 
-% figure(10);
-% subplot(2,1,1)
-% plot(x_li(6,:));grid on;
-% subplot(2,1,2)
-% plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
-% 
-% 
-% figure(11);
-% subplot(4,1,1)
-% plot(f_li(3,:));%
-% hold on; grid on;
-% subplot(4,1,2)
-% plot(f_li(6,:));%
-% hold on; grid on;
-% subplot(4,1,3)
-% plot(f_li(9,:));%
-% hold on; grid on;
-% subplot(4,1,4)
-% plot(f_li(12,:));%
-% grid on;
-% 
-% figure(12);
-% subplot(4,1,1)
-% plot(f_li(1,:));%
-% hold on; grid on;
-% subplot(4,1,2)
-% plot(f_li(4,:));%
-% hold on; grid on;
-% subplot(4,1,3)
-% plot(f_li(7,:));
-% hold on; grid on;
-% subplot(4,1,4)
-% plot(f_li(10,:));
-% grid on;
+figure(10);
+subplot(2,1,1)
+plot(x_li(6,:));grid on;
+subplot(2,1,2)
+plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
 
-% figure(13);
-% pic_num = 1;%保存gif用
-% time=['NLP','_',datestr(datetime('now'),'yyyy-mm-dd-HH-MM'),'_Animated.gif'];
-% for i=1:N
-%     cube_animate(x_li(:,i),i,p_li(:,i),~cs_val(i,:),[0;0;0;0],...
-%         f_li(:,i),3,[],[],[],[],[],[-20,14],dt_steps,[]);
-% pause(0.01);%影响绘画
-% end
+
+figure(11);
+subplot(4,1,1)
+plot(f_li(3,:));%
+hold on; grid on;
+subplot(4,1,2)
+plot(f_li(6,:));%
+hold on; grid on;
+subplot(4,1,3)
+plot(f_li(9,:));%
+hold on; grid on;
+subplot(4,1,4)
+plot(f_li(12,:));%
+grid on;
+
+figure(12);
+subplot(4,1,1)
+plot(f_li(1,:));%
+hold on; grid on;
+subplot(4,1,2)
+plot(f_li(4,:));%
+hold on; grid on;
+subplot(4,1,3)
+plot(f_li(7,:));
+hold on; grid on;
+subplot(4,1,4)
+plot(f_li(10,:));
+grid on;
+
+figure(13);
+pic_num = 1;%保存gif用
+time=['NLP','_',datestr(datetime('now'),'yyyy-mm-dd-HH-MM'),'_Animated.gif'];
+for i=1:plan_steps
+    cube_animate(x_li(:,i),i,p_li(:,i),~contact_states_value(i,:),[0;0;0;0],...
+        f_li(:,i),3,[],[],[],[],[],[-20,14],dt_steps,[]);
+pause(0.01);%影响绘画
+end
 
 %% generate reference trajectory
 Xd_ = zeros(30,plan_steps);

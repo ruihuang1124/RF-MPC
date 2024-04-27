@@ -13,18 +13,20 @@
 %% initialization
 clear all;close all;clc
 addpath fcns fcns_MPC
+addpath('../qpSWIFT/matlab/')
 
 %% --- parameters ---
 % ---- gait ----
-% 0-trot; 1-bound; 2-pacing 3-gallop; 4-trot run; 5-crawl
-gait = 1;
+% 0-trot; 1-bound; 2-pacing 3-gallop; 4-trot run; 5-crawl; [-6]-complex jump
+gait = 0;
 p = get_params(gait);
-p.playSpeed = 1;
-p.flag_movie = 1;       % 1 - make movie
+p.playSpeed = 5;
+p.flag_movie = 0;       % 1 - make movie
 use_qpSWIFT = 1;        % 0 - quadprog, 1 - qpSWIFT (external)
+optimal_jump = 0;
 
 dt_sim = p.simTimeStep;
-SimTimeDuration = 0.5;  % [sec]
+SimTimeDuration = 3.5;  % [sec]
 MAX_ITER = floor(SimTimeDuration/p.simTimeStep);
 
 % desired trajectory
@@ -39,6 +41,9 @@ if gait == 1
     [p,Xt,Ut] = fcn_bound_ref_traj(p);
 else
     [Xt,Ut] = fcn_gen_XdUd(0,[],[1;1;1;1],p);
+    if optimal_jump == 1
+        [Xd_,Ud_] = fcn_gen_JumpXdUd(p);
+    end
 end
 
 % --- logging ---
@@ -53,14 +58,28 @@ tic
 for ii = 1:MAX_ITER
     % --- time vector ---
     t_ = dt_sim * (ii-1) + p.Tmpc * (0:p.predHorizon-1);
-    
-    % --- FSM ---
-    if gait == 1
-        [FSM,Xd,Ud,Xt] = fcn_FSM_bound(t_,Xt,p);
+    if optimal_jump == 1
+        if ii < (p.plan_steps - p.predHorizon)
+            %loading optimized trajectory
+            FSM = zeros(4,1);
+            Xd = Xd_(:,ii:ii+6);
+            Ud = Ud_(:,ii:ii+6);
+        else
+          % --- FSM ---
+            if gait == 1
+                [FSM,Xd,Ud,Xt] = fcn_FSM_bound(t_,Xt,p);
+            else
+                [FSM,Xd,Ud,Xt] = fcn_FSM(t_,Xt,p);
+            end
+       end
     else
-        [FSM,Xd,Ud,Xt] = fcn_FSM(t_,Xt,p);
+      % --- FSM ---
+        if gait == 1
+           [FSM,Xd,Ud,Xt] = fcn_FSM_bound(t_,Xt,p);
+         else
+           [FSM,Xd,Ud,Xt] = fcn_FSM(t_,Xt,p);
+         end
     end
-
     % --- MPC ----
     % form QP
     [H,g,Aineq,bineq,Aeq,beq] = fcn_get_QP_form_eta(Xt,Ut,Xd,Ud,p);
