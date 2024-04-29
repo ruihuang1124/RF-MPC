@@ -23,10 +23,10 @@ p = get_params(gait);
 p.playSpeed = 5;
 p.flag_movie = 0;       % 1 - make movie
 use_qpSWIFT = 1;        % 0 - quadprog, 1 - qpSWIFT (external)
-optimal_jump = 0;
+optimal_jump = 1;
 
 dt_sim = p.simTimeStep;
-SimTimeDuration = 3.5;  % [sec]
+SimTimeDuration = 4.8;  % [sec]
 MAX_ITER = floor(SimTimeDuration/p.simTimeStep);
 
 % desired trajectory
@@ -50,6 +50,7 @@ end
 tstart = 0;
 tend = dt_sim;
 
+
 [tout,Xout,Uout,Xdout,Udout,Uext,FSMout] = deal([]);
 
 % --- simulation ----
@@ -59,12 +60,24 @@ for ii = 1:MAX_ITER
     % --- time vector ---
     t_ = dt_sim * (ii-1) + p.Tmpc * (0:p.predHorizon-1);
     if optimal_jump == 1
-        if ii < (p.plan_steps - p.predHorizon)
+        if ii < (p.plan_steps)
+            Xd_(:,ii+p.plan_steps) = Xd_(:,p.plan_steps);
+            Ud_(:,ii+p.plan_steps) = Ud_(:,p.plan_steps);
             %loading optimized trajectory
             FSM = zeros(4,1);
-            Xd = Xd_(:,ii:ii+6);
-            Ud = Ud_(:,ii:ii+6);
+            Xd = Xd_(:,ii:ii+p.predHorizon - 1);
+            Ud = Ud_(:,ii:ii+p.predHorizon - 1);
+            Ut_test = Ud_(:,ii);
         else
+            t_ = t_ - dt_sim * (p.plan_steps-1);
+
+            % [Xt_test,Ut_test] = fcn_gen_XdUd(0,[],[1;1;1;1],p);
+            % 
+            % for jj = 1:p.predHorizon
+            %     Xd(:,jj) = Xd_(:,p.plan_steps);
+            %     Ud(:,jj) = Ud_(:,p.plan_steps);
+            % end
+            
           % --- FSM ---
             if gait == 1
                 [FSM,Xd,Ud,Xt] = fcn_FSM_bound(t_,Xt,p);
@@ -92,16 +105,24 @@ for ii = 1:MAX_ITER
         [zval,basic_info] = qpSWIFT(sparse(H),g,sparse(Aeq),beq,sparse(Aineq),bineq);
     end
     
-    Ut = Ut + zval(1:12);
+    % Ut = Ut + zval(1:12);
+    % Ut_test = Ud(:,1);
+    if ii >= p.plan_steps
+        Ut = Ut + zval(1:12);
+        Ut_test = Ut;
+    end
     
+    % Ut = Ut + zval(1:12);
+    % Ut_test = Ut;
     % --- external disturbance ---
     [u_ext,p_ext] = fcn_get_disturbance(tstart,p);
     p.p_ext = p_ext;        % position of external force
     u_ext = 0*u_ext;
     
     % --- simulate ---
-    [t,X] = ode45(@(t,X)dynamics_SRB(t,X,Ut,Xd,0*u_ext,p),[tstart,tend],Xt);
-    
+    % [t,X] = ode45(@(t,X)dynamics_SRB(t,X,Ut,Xd,0*u_ext,p),[tstart,tend],Xt);
+    [t,X] = ode45(@(t,X)dynamics_SRB(t,X,Ut_test,Xd,0*u_ext,p),[tstart,tend],Xt);
+
     
     % --- update ---
     Xt = X(end,:)';
@@ -112,7 +133,8 @@ for ii = 1:MAX_ITER
     lent = length(t(2:end));
     tout = [tout;t(2:end)];
     Xout = [Xout;X(2:end,:)];
-    Uout = [Uout;repmat(Ut',[lent,1])];
+    % Uout = [Uout;repmat(Ut',[lent,1])];
+    Uout = [Uout;repmat(Ut_test',[lent,1])];
     Xdout = [Xdout;repmat(Xd(:,1)',[lent,1])];
     Udout = [Udout;repmat(Ud(:,1)',[lent,1])];
     Uext = [Uext;repmat(u_ext',[lent,1])];

@@ -14,7 +14,7 @@ p.Qf = diag([1e5 2e5 3e5 5e2 1e3 150 1e3 1e4 800 40 40 10]);
 if gait == 1                % 1 - bound
     p.Tst = 0.1;
     p.Tsw = 0.18;
-    p.predHorizon = 7;
+    p.predHorizon = 20;
     p.simTimeStep = 1/100;  
     p.Tmpc = 2/100;
     p.decayRate = 1;
@@ -46,13 +46,13 @@ elseif gait == 5            % 4 - crawl
     p.R = diag(repmat([0.1 0.2 0.1]',[4,1]));
     p.Q = diag([5e5 5e5 9e5 5 5 5 3e3 3e3 3e3 3 3 3]);
 else                        % 0 - trot
-    p.predHorizon = 6;
+    p.predHorizon = 40;
     p.simTimeStep = 1/100;
     p.Tmpc = 8/100;
     p.Tst = 0.3;
     p.Tsw = 0.15;
     p.R = diag(repmat([0.1 0.2 0.1]',[4,1]));
-    p.Q = diag([1e5 2e5 3e5 5e2 1e3 1e3 1e3 1e4 800 40 40 10]);
+    p.Q = diag([1e5 2e5 3e6 5e2 1e3 1e3 1e3 1e4 800 40 40 10]);
     p.Qf = p.Q;
 end
 
@@ -81,5 +81,8 @@ p.body_color    = [42 80 183]/255;
 p.leg_color     = [7 179 128]/255;
 p.ground_color  = [195 232 243]/255;
 
+%%
+p.plan_steps = 80;
+p.plan_time_horizon = 0.4;
 
 

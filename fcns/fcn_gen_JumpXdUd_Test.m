@@ -1,4 +1,4 @@
-function [Xd_,Ud_] = fcn_gen_JumpXdUd(p)
+function [Xd_,Ud_] = fcn_gen_JumpXdUd_Test(p)
 
 addpath('../arclab-quad-sdk/nmpc_controller/scripts/utils/casadi-windows/')
 import casadi.*
@@ -11,15 +11,24 @@ max_force_z = 128;
 max_jump_z=0.8; 
 min_position_z=0.15;
 max_jump_speed_z=3.5;
-position_z_init=0.2; 
-position_z_temp = 0.5;
+% position_z_init=0.2; 
+% position_z_temp = 0.5;
 number_of_legs = 4;
 world.mu=p.mu;
+%%
+position_z_init=0.2; 
+state_initial_ref_value = [0 0 position_z_init, 0 0 0, ...
+    1 0 0, 0 1 0, 0 0 1,...
+    0 0 0]; % x,y,z, vx,vy,vz, R(9*1), omega_body_frame 
 
+state_final_ref_value = [0.4 0 position_z_init, 0 0 0, ...
+    1 0 0, 0 1 0, 0 0 1,...
+    0 0 0]; % x,y,z, vx,vy,vz, R(9*1), omega_body_frame 
+%%
 q_init_value = [0 0 0 0 0 position_z_init]'; % rpy  xyz
 qd_init_value = [0 0 0 0 0 0]';
-q_temp_value = [0 0 0 0 0 position_z_temp]'; % rpy  xyz
-qd_temp_value = [0 0 0 0 0 0]';
+% q_temp_value = [0 0 0 0 0 position_z_temp]'; % rpy  xyz
+% qd_temp_value = [0 0 0 0 0 0]';
 q_final_reference_value  = [1*pi*0, -22/57.3*0, pi*0, 0.0, 0, 0.2]';
 qd_final_reference_value = [0 0 0, 0 0 0]';
 
@@ -28,8 +37,8 @@ contact_states_value = [repmat([1 1 1 1]', 1, plan_steps * 0.375) ...
     repmat([0 0 0 0]', 1, plan_steps * 0.475) ...
     repmat([1 1 1 1]', 1, plan_steps * 0.025)]'; % predefined 
 
-weight.Q_states = [10 10 10, 10 10 10, 10 10 10, 10 10 10 ]'; 
-weight.Q_final_state = [10 10 10, 50 50 150, 10 10 10, 10 10 100 ]';
+weight.Q_states = [30 40 50, 10 10 10, 10 10 10, 10 10 10, 10 10 10, 10 10 10]';  %x,y,z, vx,vy,vz, R(9*1), omega_body_frame 
+weight.Q_final_state = [50 50 150, 10 10 10, 10 10 10, 10 10 10, 10 10 10, 10 10 10]';
 weight.Q_foot_positions = [0.001 0.001 0.001]';
 weight.Q_control_input = [0.0001 0.0001 0.001]';
 
@@ -63,47 +72,94 @@ kinematic_block =[ 1, 0,  0,-kinematic_box_x; % under hip frame
 
 %% Constructing linearized system differential equations
 
-state_X_kstep = SX.sym('Xk', 12, 1); % CasADi SX type.
+% state_X_kstep = SX.sym('Xk', 12, 1); % CasADi SX type.
+% number_of_states = size(state_X_kstep,1);
+% control_inputs_U_kstep = SX.sym('Uk', 12, 1);
+% number_of_control_inputs = size(control_inputs_U_kstep,1);
+% com_to_foot_vector_world_frame_R_kstep = SX.sym('Rk', 12, 1);
+% number_of_com_to_foot_vector_R_kstep = size(com_to_foot_vector_world_frame_R_kstep,1);
+% 
+% I3 = eye(3);
+% 
+% rotation_matrix_world_to_robot = rotsb(state_X_kstep(1:3));
+% cy = cos(state_X_kstep(3));
+% sy = sin(state_X_kstep(3));
+% % cp = cos(state_X_kstep(2));
+% % sp = sin(state_X_kstep(2));
+% 
+% rotation_matrix_world_to_robot_yaw =[cy sy 0;
+%         -sy cy 0;
+%         0 0 1]; % world to robot
+% Ig = rotation_matrix_world_to_robot*robot.Ib*rotation_matrix_world_to_robot';
+% Ig_inv=Ig\I3;
+% 
+% % SRBD
+% A = [zeros(3) zeros(3) rotation_matrix_world_to_robot_yaw zeros(3)  ;
+%      zeros(3) zeros(3) zeros(3) I3 ;
+%      zeros(3) zeros(3) zeros(3) zeros(3);
+%      zeros(3) zeros(3) zeros(3) zeros(3) ;
+%     ];
+% 
+% % AA=A;
+% % AA(1:3,7:9)=R_w;
+% 
+% B = [ zeros(3)           zeros(3)           zeros(3)            zeros(3);
+%     zeros(3)           zeros(3)           zeros(3)            zeros(3);
+%     Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(1:3)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(4:6)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(7:9))  Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(10:12));
+%     I3/robot.m   I3/robot.m   I3/robot.m    I3/robot.m;];
+% 
+% g = zeros(12,1);
+% g(12) = -world.g;
+% dot_state_X = A*state_X_kstep+B*control_inputs_U_kstep+g; % Constructing symbolic equations for differential dynamics
+% 
+% system_dynamic = Function('system_dynamic',{state_X_kstep; control_inputs_U_kstep; com_to_foot_vector_world_frame_R_kstep},{dot_state_X},{'input_states','control_inputs','foot_input'},{'dotX'});
+
+%% constructing system dynamic differencial function.
+state_X_kstep = SX.sym('Xk', 18, 1); % CasADi SX type.
 number_of_states = size(state_X_kstep,1);
 control_inputs_U_kstep = SX.sym('Uk', 12, 1);
 number_of_control_inputs = size(control_inputs_U_kstep,1);
 com_to_foot_vector_world_frame_R_kstep = SX.sym('Rk', 12, 1);
 number_of_com_to_foot_vector_R_kstep = size(com_to_foot_vector_world_frame_R_kstep,1);
 
-I3 = eye(3);
+% mass = p.mass;
 
-rotation_matrix_world_to_robot = rotsb(state_X_kstep(1:3));
-cy = cos(state_X_kstep(3));
-sy = sin(state_X_kstep(3));
-% cp = cos(state_X_kstep(2));
-% sp = sin(state_X_kstep(2));
+% decompose
+% X = [pc dpc vectorR wb pf]'
+pc = reshape(state_X_kstep(1:3),[3,1]);
+dpc = reshape(state_X_kstep(4:6),[3,1]);
+R = reshape(state_X_kstep(7:15),[3,3]);
+wb = reshape(state_X_kstep(16:18),[3,1]);
+% pf34 = reshape(Xt(19:30),[3,4]);
+% pfd34 = reshape(Xd(19:30),[3,4]);
 
-rotation_matrix_world_to_robot_yaw =[cy sy 0;
-        -sy cy 0;
-        0 0 1]; % world to robot
-Ig = rotation_matrix_world_to_robot*robot.Ib*rotation_matrix_world_to_robot';
-Ig_inv=Ig\I3;
+% r
+% r34 = pf34 - repmat(pc,[1,4]);
+r34 = reshape(com_to_foot_vector_world_frame_R_kstep,[3,4]);
+% pf34 = r34 + repmat(pc,[1,4]);
 
-% SRBD
-A = [zeros(3) zeros(3) rotation_matrix_world_to_robot_yaw zeros(3)  ;
-     zeros(3) zeros(3) zeros(3) I3 ;
-     zeros(3) zeros(3) zeros(3) zeros(3);
-     zeros(3) zeros(3) zeros(3) zeros(3) ;
-    ];
+% GRF
+f34 = reshape(control_inputs_U_kstep,[3,4]);
 
-% AA=A;
-% AA(1:3,7:9)=R_w;
+% --- external disturbance ---
+U_ext = [0;0;0];
+p_ext = [p.L/2;p.W/2;p.d];  % external force point in body frame
 
-B = [ zeros(3)           zeros(3)           zeros(3)            zeros(3);
-    zeros(3)           zeros(3)           zeros(3)            zeros(3);
-    Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(1:3)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(4:6)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(7:9))  Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(10:12));
-    I3/robot.m   I3/robot.m   I3/robot.m    I3/robot.m;];
+% dynamics
+ddpc = 1/robot.m * (sum(f34,2) + U_ext) + [0;0;-world.g];
+dR = R * hatMap(wb);
 
-g = zeros(12,1);
-g(12) = -world.g;
-dot_state_X = A*state_X_kstep+B*control_inputs_U_kstep+g; % Constructing symbolic equations for differential dynamics
-
-system_dynamic = Function('system_dynamic',{state_X_kstep; control_inputs_U_kstep; com_to_foot_vector_world_frame_R_kstep},{dot_state_X},{'input_states','control_inputs','foot_input'},{'dotX'});
+tau_s = zeros(3,1);       % body torque expressed in {S}
+for ii = 1:4
+    tau_s = tau_s + hatMap(r34(:,ii)) * f34(:,ii);
+end
+tau_ext = hatMap(R * p_ext) * U_ext;
+tau_tot = sum(tau_s,2) + tau_ext;
+dwb = robot.Ib \ (R' * tau_tot - hatMap(wb) * robot.Ib * wb);
+% dpf = p.Kp_sw * (pfd34(:) - pf34(:));
+dXdt = [dpc;ddpc;dR(:);dwb];
+% dot_state_X = A*state_X_kstep+B*control_inputs_U_kstep+g; % Constructing symbolic equations for differential dynamics
+system_dynamic = Function('system_dynamic',{state_X_kstep; control_inputs_U_kstep; com_to_foot_vector_world_frame_R_kstep},{dXdt},{'input_states','control_inputs','foot_input'},{'dotX'});
 
 %% Construction cost function and constraints
 % Variable definitions, system variables and reference parameters variables
@@ -121,11 +177,11 @@ contact_states = SX.sym('ConState', number_of_legs, plan_steps);
 % defect_** for constraints and error_** for costs calculation.
 
 defect_init = reference_states_X(:,1)-states_X(:,1); % 12*1 eq
-defect_state = SX.zeros(12*(plan_steps+1),1); % 12(N+1)*1 eq
+defect_state = SX.zeros(number_of_states * (plan_steps+1),1); % 12(N+1)*1 eq
 defect_FootOnGround = SX.zeros(4*(plan_steps),1); % 4(N)*1 eq
 defect_footStance = SX.zeros(12*(plan_steps),1); % (3*4)(N)*1 eq
 
-number_of_equation_constraints = 12+12*(plan_steps+1)+4*(plan_steps)+12*(plan_steps);
+number_of_equation_constraints = number_of_states+number_of_states*(plan_steps+1)+number_of_legs*(plan_steps)+12*(plan_steps);
 
 defect_legLimits = SX.zeros(24*(plan_steps),1); %(4*6)(N)*1
 defect_footforce = SX.zeros(16*(plan_steps),1); %(4*4)(N)*1: xy friction constraints with number of 4.
@@ -150,7 +206,7 @@ for k = 1:plan_steps
     cost_object = cost_object + (error_states_X'*diag(weight.Q_states)*error_states_X+...           % sum
           error_foot_position'*diag(repmat(weight.Q_foot_positions,4,1))*error_foot_position+...
           error_control_inputs_U'*diag(repmat(weight.Q_control_input,4,1))*error_control_inputs_U)*dt_current_step;
-    defect_state((k-1)*12+1:(k-1)*12+12)=states_X(:,k+1)-(state_X_current+system_dynamic(state_X_current,control_inputs_U_current,com_to_foot_vector_world_frame_R_current)*dt_current_step); % 欧拉积分
+    defect_state((k-1)*number_of_states+1:(k-1)*number_of_states+number_of_states)=states_X(:,k+1)-(state_X_current+system_dynamic(state_X_current,control_inputs_U_current,com_to_foot_vector_world_frame_R_current)*dt_current_step); % 欧拉积分
     % normal force of f_z > 0
     defect_ForceNormal(k)=-dot(control_inputs_U_current,repmat([0;0;1],4,1));
     defect_footswing((k-1)*4+1:(k-1)*4+4) = control_inputs_U_current([3,6,9,12])-contact_states_current.*repmat(1000,4,1);
@@ -212,9 +268,12 @@ args.ubg(number_of_equation_constraints+1 : number_of_equation_constraints+ numb
 % upper bound of state
 tempub=[robot.m*world.g*world.mu*6; robot.m*world.g*world.mu*6 ;max_force_z];
 args.ubx=[];
-UBx=[pi*3*ones(3,1);10*ones(2,1);1; pi*3*ones(3,1);40*ones(3,1)]; % The upper bound of the state constrains the maximum height of the jump
-UBx(6)=max_jump_z;
-UBx(12)=max_jump_speed_z;
+% UBx=[pi*3*ones(3,1);10*ones(2,1);1; pi*3*ones(3,1);40*ones(3,1)]; % The upper bound of the state constrains the maximum height of the jump
+% UBx(6)=max_jump_z;
+% UBx(12)=max_jump_speed_z;
+UBx=[10*ones(3,1);40*ones(3,1); 2 * ones(9,1); pi*3*ones(3,1)]; % The upper bound of the state constrains the maximum height of the jump
+UBx(3)=max_jump_z;
+UBx(6)=max_jump_speed_z;
 UBx=repmat(UBx,plan_steps+1,1);
 UBf=[tempub;tempub;tempub;tempub];
 UBf=repmat(UBf,plan_steps,1);
@@ -224,7 +283,7 @@ args.ubx=[args.ubx;UBx;UBf;UBp];
 % lower bound of state
 templb=[-robot.m*world.g*world.mu*6; -robot.m*world.g*world.mu*6 ;0]; % 
 args.lbx=[];
-LBx=[-pi*3*ones(3,1);-10*ones(2,1);min_position_z; -pi*3*ones(3,1);-40*ones(3,1)]; %
+LBx=[-10*ones(3,1);-40*ones(3,1); -2 * ones(9,1); -pi*3*ones(3,1)]; %
 LBx=repmat(LBx,plan_steps+1,1);
 LBf=[templb;templb;templb;templb];
 LBf=repmat(LBf,plan_steps,1);
@@ -233,17 +292,25 @@ LBp=repmat(LBp,plan_steps,1);
 args.lbx=[args.lbx;LBx;LBf;LBp];
 
 % Construct a reference trajectory for a jump
-c_ref = diag([1 1 1, 1 -1 1, -1 1 1, -1 -1 1])*repmat([0.15 0.094 -position_z_init],1,4)'; % 初始化足端位置
+c_ref = diag([1 1 1, 1 -1 1, -1 1 1, -1 -1 1])*repmat([0.15 0.094 -position_z_init],1,4)'; % 初始化足端位置!!!检查这里！！！！这里的值来自于pf34
 f_ref = zeros(12,1);
 % set parameter values 设定期望运动轨迹
-for i = 1:6 % 对状态线性插值
-    Xref_val(i,:) = linspace(q_init_value(i),q_final_reference_value(i),plan_steps+1); % 决定轨迹末端位置
-    Xref_val(6+i,:) = linspace(qd_init_value(i),qd_final_reference_value(i),plan_steps+1);
+% for i = 1:6 % 对状态线性插值
+%     Xref_val(i,:) = linspace(q_init_value(i),q_final_reference_value(i),plan_steps+1); % 决定轨迹末端位置
+%     Xref_val(6+i,:) = linspace(qd_init_value(i),qd_final_reference_value(i),plan_steps+1);
+% end
+%%
+% number_of_states = 18;
+% plan_steps = 40;
+for i = 1:number_of_states
+    Xref_val(i,:) = linspace(state_initial_ref_value(i),state_final_ref_value(i),plan_steps+1);
 end
+
+%%
 % Z向抛物线
-a = [Xref_val(4,1),Xref_val(4,plan_steps/2),Xref_val(4,plan_steps)]; % x
-b = [q_init_value(6),q_final_reference_value(6),q_init_value(6)+0.0]; % z
-% Xref_val(6,:) = interp1(a,b,Xref_val(4,:),'spline'); % 高度方向做Spline插值
+a = [Xref_val(1,1),Xref_val(1,plan_steps/2),Xref_val(1,plan_steps)]; % x
+b = [state_initial_ref_value(3),state_final_ref_value(3),state_initial_ref_value(3)+0.0]; % z
+Xref_val(3,:) = interp1(a,b,Xref_val(1,:),'spline'); % 高度方向做Spline插值
 Uref_val = zeros(24,plan_steps);
 r_ref = zeros(12,plan_steps);
 for leg = 1:4
@@ -254,18 +321,18 @@ for leg = 1:4
     end
 end
 
-if(1) % 线性插值
-    for i = 1:6
-        Xref_val(i,:) = linspace(q_init_value(i), q_final_reference_value(i), plan_steps + 1);
-        Xref_val(6+i,:) = linspace(qd_init_value(i), qd_final_reference_value(i), plan_steps + 1);
-    end
-    for leg = 1:4
-        for xyz = 1:3
-            Uref_val(3*(leg-1)+xyz,:)    = Xref_val(xyz,1:end-1) + c_ref(3*(leg-1)+xyz);
-            Uref_val(12+3*(leg-1)+xyz,:) = f_ref(xyz).*ones(1,plan_steps);
-        end
-    end
-end
+% if(1) % 线性插值
+%     for i = 1:6
+%         Xref_val(i,:) = linspace(q_init_value(i), q_final_reference_value(i), plan_steps + 1);
+%         Xref_val(6+i,:) = linspace(qd_init_value(i), qd_final_reference_value(i), plan_steps + 1);
+%     end
+%     for leg = 1:4
+%         for xyz = 1:3
+%             Uref_val(3*(leg-1)+xyz,:)    = Xref_val(xyz,1:end-1) + c_ref(3*(leg-1)+xyz);
+%             Uref_val(12+3*(leg-1)+xyz,:) = f_ref(xyz).*ones(1,plan_steps);
+%         end
+%     end
+% end
 F_ref=Uref_val(13:24,:);
 
 args.p=[reshape(Xref_val,number_of_states*(plan_steps+1),1);reshape(F_ref,number_of_control_inputs*plan_steps,1);reshape(r_ref,number_of_com_to_foot_vector_R_kstep*plan_steps,1);reshape(contact_states_value',4*plan_steps,1)];%送入了轨迹约束 相序约束
@@ -285,9 +352,9 @@ p_li=r_li+repmat(x_li(4:6,1:end-1),4,1); % foot_position_world_frame
 
 figure(10);
 subplot(2,1,1)
-plot(x_li(6,:));grid on;
+plot(x_li(3,:));grid on;
 subplot(2,1,2)
-plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
+plot(x_li(1,:));grid on;%  xyz, vx,....
 
 
 figure(11);
@@ -318,11 +385,20 @@ subplot(4,1,4)
 plot(f_li(10,:));
 grid on;
 
+% x_plot = zeros(12,plan_steps+1);
+for i = 1:plan_steps
+    x_plot(1:3,i) = [0;0;0];
+    x_plot(4:6,i) = x_li(1:3,i);
+    x_plot(7:9,i) = x_li(16:18,i);
+    x_plot(10:12,i) = x_li(4:6,i);
+end
+
+
 figure(13);
 pic_num = 1;%保存gif用
 time=['NLP','_',datestr(datetime('now'),'yyyy-mm-dd-HH-MM'),'_Animated.gif'];
 for i=1:plan_steps
-    cube_animate(x_li(:,i),i,p_li(:,i),~contact_states_value(i,:),[0;0;0;0],...
+    cube_animate(x_plot(:,i),i,p_li(:,i),~contact_states_value(i,:),[0;0;0;0],...
         f_li(:,i),3,[],[],[],[],[],[-20,14],dt_steps,[]);
 pause(0.01);%影响绘画
 end
@@ -331,15 +407,29 @@ end
 Xd_ = zeros(30,plan_steps);
 Ud_ = zeros(12,plan_steps);
 Rground = p.Rground;           % ground slope
+% for ii = 1:plan_steps
+%     pf34 = [[p_li(1,ii);p_li(2,ii);p_li(3,ii)],[p_li(4,ii);p_li(5,ii);p_li(6,ii)],[p_li(7,ii);p_li(8,ii);p_li(9,ii)],[p_li(10,ii);p_li(11,ii);p_li(12,ii)]];
+%     pc_d = [x_li(4,ii);x_li(5,ii);x_li(6,ii)];
+%     dpc_d = [x_li(10,ii);x_li(11,ii);x_li(12,ii)];
+%     wb_d = [x_li(7,ii);x_li(8,ii);x_li(9,ii)];
+%     ea_d = [x_li(1,ii);x_li(2,ii);x_li(3,ii)];
+%     vR_d = reshape(expm(hatMap(ea_d)),[9,1]);
+%     pfd = reshape(Rground * pf34,[12,1]);
+%     Xd_(:,ii) = [pc_d;dpc_d;vR_d;wb_d;pfd];
+%     Ud_(:,ii) = f_li(:,ii);
+% end
+
 for ii = 1:plan_steps
     pf34 = [[p_li(1,ii);p_li(2,ii);p_li(3,ii)],[p_li(4,ii);p_li(5,ii);p_li(6,ii)],[p_li(7,ii);p_li(8,ii);p_li(9,ii)],[p_li(10,ii);p_li(11,ii);p_li(12,ii)]];
-    pc_d = [x_li(4,ii);x_li(5,ii);x_li(6,ii)];
-    dpc_d = [x_li(10,ii);x_li(11,ii);x_li(12,ii)];
-    wb_d = [x_li(7,ii);x_li(8,ii);x_li(9,ii)];
-    ea_d = [x_li(1,ii);x_li(2,ii);x_li(3,ii)];
-    vR_d = reshape(expm(hatMap(ea_d)),[9,1]);
+    % pc_d = [x_li(4,ii);x_li(5,ii);x_li(6,ii)];
+    % dpc_d = [x_li(10,ii);x_li(11,ii);x_li(12,ii)];
+    % wb_d = [x_li(7,ii);x_li(8,ii);x_li(9,ii)];
+    % ea_d = [x_li(1,ii);x_li(2,ii);x_li(3,ii)];
+    % vR_d = reshape(expm(hatMap(ea_d)),[9,1]);
     pfd = reshape(Rground * pf34,[12,1]);
-    Xd_(:,ii) = [pc_d;dpc_d;vR_d;wb_d;pfd];
+    % Xd_(:,ii) = [pc_d;dpc_d;vR_d;wb_d;pfd];
+    Xd_(1:18,ii) = x_li(:,ii);
+    Xd_(19:30,ii) = pfd;
     Ud_(:,ii) = f_li(:,ii);
 end
 end
