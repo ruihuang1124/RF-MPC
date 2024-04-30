@@ -46,7 +46,7 @@ elseif gait == 5            % 4 - crawl
     p.R = diag(repmat([0.1 0.2 0.1]',[4,1]));
     p.Q = diag([5e5 5e5 9e5 5 5 5 3e3 3e3 3e3 3 3 3]);
 else                        % 0 - trot
-    p.predHorizon = 20;
+    p.predHorizon = 6;
     p.simTimeStep = 1/100;
     p.Tmpc = 8/100;
     p.Tst = 0.3;

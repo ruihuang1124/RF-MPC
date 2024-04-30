@@ -32,15 +32,26 @@ position_x_init = 0.0;
 v_x_init = 0.0;
 position_x_takeoff = position_x_init;
 v_x_takeoff = 0.0;
-position_x_touch_down = 0.1;
+position_x_touch_down = 0.2;
 v_x_touch_down = 0.0;
 position_x_final = position_x_touch_down;
 v_x_final = 0.0;
 position_x_maxz = (position_x_touch_down - position_x_takeoff)/2;
 v_x_maxz = 0.0;
 
+position_y_init = 0.0;
+v_y_init = 0.0;
+position_y_takeoff = position_y_init;
+v_y_takeoff = 0.0;
+position_y_touch_down = 0.1;
+v_y_touch_down = 0.0;
+position_y_final = position_y_touch_down;
+v_y_final = 0.0;
+position_y_maxz = (position_y_touch_down - position_y_takeoff)/2;
+v_y_maxz = 0.0;
 
-q_init_value = [0 0 0 position_x_init 0 position_z_init]'; % rpy  xyz
+
+q_init_value = [0 0 0 position_x_init position_y_init position_z_init]'; % rpy  xyz
 qd_init_value = [0 0 0 0 0 0]';
 
 % 根据最高点z值以及降落点x值计算抛物线，确定takeoff起飞时候和tauchdown降落时候的状态
@@ -49,20 +60,23 @@ v_z_takeoff = sqrt(2*world.g * (position_z_max - position_z_takeoff));
 t_flight = 2*v_z_takeoff/world.g;
 flight_steps = round((t_flight / p.plan_time_horizon) * plan_steps);
 v_x_takeoff = (position_x_touch_down - position_x_takeoff) * world.g / (2*v_z_takeoff);
-qd_takeoff_value = [0 0 0, v_x_takeoff, 0, v_z_takeoff]';
-q_takeoff_value = [0 0 0, position_x_takeoff, 0, position_z_takeoff]';
+v_y_takeoff = (position_y_touch_down - position_y_takeoff) * world.g / (2*v_z_takeoff);
+qd_takeoff_value = [0 0 0, v_x_takeoff, v_y_takeoff, v_z_takeoff]';
+q_takeoff_value = [0 0 0, position_x_takeoff, position_y_takeoff, position_z_takeoff]';
 % 抛物线最高点value；
 v_x_maxz = v_x_takeoff;
-q_max_z_value = [0 0 0, position_x_maxz 0 position_z_max]'; % rpy  xyz
-qd_max_z_value = [0 0 0, v_x_maxz 0 0]';
+v_y_maxz = v_y_takeoff;
+q_max_z_value = [0 0 0, position_x_maxz position_y_maxz position_z_max]'; % rpy  xyz
+qd_max_z_value = [0 0 0, v_x_maxz v_y_maxz 0]';
 % 触地时刻的value，主要是速度，z向有重力加速度，x向则无加速度
 v_x_touch_down = v_x_maxz;
+v_y_touch_down = v_y_maxz;
 v_z_touch_down = -v_z_takeoff;
-q_touchdown_value = [0 0 0, position_x_touch_down, 0, position_z_touch_down]';
-qd_touchdown_value = [0 0 0, v_x_touch_down, 0, v_z_touch_down]';
+q_touchdown_value = [0 0 0, position_x_touch_down, position_y_touch_down, position_z_touch_down]';
+qd_touchdown_value = [0 0 0, v_x_touch_down, v_y_touch_down, v_z_touch_down]';
 % 
 % 最后时刻的value
-q_final_reference_value  = [0, 0, 0, position_x_final, 0, position_z_init]';
+q_final_reference_value  = [0, 0, 0, position_x_final, position_y_final, position_z_init]';
 qd_final_reference_value = [0 0 0, 0 0 0]';%最终全部速度为0
 
 touchdown_steps = plan_steps - prejump_steps - flight_steps;
@@ -326,58 +340,33 @@ r_li=sol.x(number_of_states*(plan_steps+1)+number_of_control_inputs*plan_steps+1
 r_li=reshape(full(r_li),number_of_control_inputs,plan_steps); % com_to_foot_world_frame
 p_li=r_li+repmat(x_li(4:6,1:end-1),4,1); % foot_position_world_frame
 
-% figure(10);
-% subplot(2,1,1)
-% plot(x_li(6,:),Xref_val(6,:));grid on;
-% subplot(2,1,2)
-% plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
-% 
-% 
-% figure(11);
-% subplot(4,1,1)
-% plot(f_li(3,:));%
-% hold on; grid on;
-% subplot(4,1,2)
-% plot(f_li(6,:));%
-% hold on; grid on;
-% subplot(4,1,3)
-% plot(f_li(9,:));%
-% hold on; grid on;
-% subplot(4,1,4)
-% plot(f_li(12,:));%
-% grid on;
-% 
-% figure(12);
-% subplot(4,1,1)
-% plot(f_li(1,:));%
-% hold on; grid on;
-% subplot(4,1,2)
-% plot(f_li(4,:));%
-% hold on; grid on;
-% subplot(4,1,3)
-% plot(f_li(7,:));
-% hold on; grid on;
-% subplot(4,1,4)
-% plot(f_li(10,:));
-% grid on;
-
-
 figure(11)
-plot(t_plot,Xref_val(6,:),'r--',...
-    t_plot,x_li(6,:),'r',...
-    t_plot,Xref_val(4,:),'b--',...
-    t_plot,x_li(4,:),'b',...
+plot(t_plot,Xref_val(6,:),'b--',...
+    t_plot,x_li(6,:),'b',...
+    t_plot,Xref_val(5,:),'r--',...
+    t_plot,x_li(5,:),'r',...
+    t_plot,Xref_val(4,:),'g--',...
+    t_plot,x_li(4,:),'g',...
     'linewidth',1);
 xlabel('t(s)') 
 ylabel('value(m)')
-title('reference & optimized z position')
+title('reference & optimized positions "blue for z, green for x, and red for y"')
+hold on; grid on;
 
-pic_num = 1;%保存gif用
-time=['NLP','_',datestr(datetime('now'),'yyyy-mm-dd-HH-MM'),'_Animated.gif'];
+figure(18)
+plot(t_plot(1:end-1),f_li(3,:),'b',...
+    t_plot(1:end-1),f_li(1,:),'g',...
+    t_plot(1:end-1),f_li(2,:),'r',...
+    'linewidth',1);
+xlabel('t(s)') 
+ylabel('value(N)')
+title('optimized control force for each leg "blue for z, green for x, and red for y"')
+hold on; grid on;
+
 for i=1:plan_steps
     cube_animate(x_li(:,i),i,p_li(:,i),~contact_states_value(i,:),[0;0;0;0],...
         f_li(:,i),3,[],[],[],[],[],[-20,14],dt_steps,[]);
-pause(0.01);%影响绘画
+pause(0.01); %
 end
 
 %% generate reference trajectory
@@ -397,7 +386,7 @@ for ii = 1:plan_steps
 end
 end
 
-%% 工具函数
+%% Tool functions
 function rotxm=rotx(theta)
 s=sin(theta);
 c=cos(theta);
@@ -432,7 +421,7 @@ rotzm=[c,-s,0;
     0,0,1];
 end
 %Rsb
-function R=rotsb(theta)%构造旋转矩阵
+function R=rotsb(theta)% constructing rotation matrix
 % R=rotx(theta(1))*roty(theta(2))*rotz(theta(3));
 R=rotz(theta(3))*roty(theta(2))*rotx(theta(1));
 

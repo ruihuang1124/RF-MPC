@@ -68,8 +68,9 @@ for ii = 1:MAX_ITER
             Xd = Xd_(:,ii:ii+p.predHorizon - 1);
             Ud = Ud_(:,ii:ii+p.predHorizon - 1);
             Ut_test = Ud_(:,ii);
+            % Ut = Ut_test;
         else
-            t_ = t_ - dt_sim * (p.plan_steps-1);
+            % t_ = t_ - dt_sim * (p.plan_steps-1);
 
             % [Xt_test,Ut_test] = fcn_gen_XdUd(0,[],[1;1;1;1],p);
             % 
