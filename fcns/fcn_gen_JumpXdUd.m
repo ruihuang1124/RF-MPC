@@ -43,7 +43,7 @@ position_y_init = 0.0;
 v_y_init = 0.0;
 position_y_takeoff = position_y_init;
 v_y_takeoff = 0.0;
-position_y_touch_down = 0.1;
+position_y_touch_down = 0.0;
 v_y_touch_down = 0.0;
 position_y_final = position_y_touch_down;
 v_y_final = 0.0;
@@ -108,7 +108,7 @@ frition_cone =[ mu_inv, 0,  -1.0;
 
 kinematic_box_x = 0.15; 
 kinematic_box_y = 0.15;
-kinematic_box_z = 0.25; 
+kinematic_box_z = 0.10; 
 
 kinematic_block =[ 1, 0,  0,-kinematic_box_x; % under hip frame
             -1, 0,  0,-kinematic_box_x;
@@ -217,8 +217,8 @@ for k = 1:plan_steps
         % leg length limits
         rotation_matrix_world_to_robot = rotsb(state_X_current(1:3));
         desired_foot_position_world_frame = rotation_matrix_world_to_robot*foot_pose_under_robot_frame_init+state_X_current(4:6); % 全局足端位置
-        p_rel = (foot_position_under_world_frame_Pk_current(xyz_idx) - desired_foot_position_world_frame(:,leg)); % hip->足端  足端矢量
-        defect_legLimits((k-1)*24+(leg-1)*6+1:(k-1)*24+(leg-1)*6+6)= kinematic_block*[p_rel;1]; % 运动学约束
+        position_foot_error = (foot_position_under_world_frame_Pk_current(xyz_idx) - desired_foot_position_world_frame(:,leg)); % hip->足端  足端矢量
+        defect_legLimits((k-1)*24+(leg-1)*6+1:(k-1)*24+(leg-1)*6+6)= kinematic_block*[position_foot_error;1]; % 运动学约束
         % no slippery when contact
         if (k < plan_steps)
             Pk1=repmat(states_X(4:6,k+1),4,1)+com_to_foot_vector_world_frame_R(:,k+1);
