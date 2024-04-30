@@ -50,8 +50,40 @@ v_y_final = 0.0;
 position_y_maxz = (position_y_touch_down - position_y_takeoff)/2;
 v_y_maxz = 0.0;
 
+euler_roll_init = 0.0;
+omega_roll_init = 0.0;
+euler_roll_takeoff = 0.0;
+omega_roll_takeoff = 0.0;
+euler_roll_touch_down = 0.0;
+omega_roll_touch_down = 0.0;
+euler_roll_final = 0.0;
+omega_roll_final = 0.0;
+euler_roll_maxz = 0.0;
+omega_roll_mazx = 0.0;
 
-q_init_value = [0 0 0 position_x_init position_y_init position_z_init]'; % rpy  xyz
+euler_pitch_init = 0.0;
+omega_pitch_init = 0.0;
+euler_pitch_takeoff = 0.0;
+omega_pitch_takeoff = 0.0;
+euler_pitch_touch_down = 0.0;
+omega_pitch_touch_down = 0.0;
+euler_pitch_final = 0.0;
+omega_pitch_final = 0.0;
+euler_pitch_maxz = 0.0;
+omega_pitch_mazx = 0.0;
+
+euler_yaw_init = 0.0;
+omega_yaw_init = 0.0;
+euler_yaw_takeoff = 0.0;
+omega_yaw_takeoff = 0.0;
+euler_yaw_touch_down = 2*pi;
+omega_yaw_touch_down = 0.0;
+euler_yaw_final = euler_yaw_touch_down;
+omega_yaw_final = 0.0;
+euler_yaw_maxz = 0.0;
+omega_yaw_mazx = 0.0;
+
+q_init_value = [euler_roll_init euler_pitch_init euler_yaw_init position_x_init position_y_init position_z_init]'; % rpy  xyz
 qd_init_value = [0 0 0 0 0 0]';
 
 % 根据最高点z值以及降落点x值计算抛物线，确定takeoff起飞时候和tauchdown降落时候的状态
@@ -61,8 +93,12 @@ t_flight = 2*v_z_takeoff/world.g;
 flight_steps = round((t_flight / p.plan_time_horizon) * plan_steps);
 v_x_takeoff = (position_x_touch_down - position_x_takeoff) * world.g / (2*v_z_takeoff);
 v_y_takeoff = (position_y_touch_down - position_y_takeoff) * world.g / (2*v_z_takeoff);
-qd_takeoff_value = [0 0 0, v_x_takeoff, v_y_takeoff, v_z_takeoff]';
-q_takeoff_value = [0 0 0, position_x_takeoff, position_y_takeoff, position_z_takeoff]';
+
+omega_yaw_takeoff = euler_yaw_touch_down / t_flight;
+omega_roll_takeoff = euler_roll_touch_down / t_flight;
+omega_pitch_takeoff = euler_pitch_touch_down / t_flight;
+qd_takeoff_value = [omega_roll_takeoff omega_pitch_takeoff omega_yaw_takeoff, v_x_takeoff, v_y_takeoff, v_z_takeoff]';
+q_takeoff_value = [euler_roll_takeoff euler_pitch_takeoff euler_yaw_takeoff, position_x_takeoff, position_y_takeoff, position_z_takeoff]';
 % 抛物线最高点value；
 v_x_maxz = v_x_takeoff;
 v_y_maxz = v_y_takeoff;
@@ -72,11 +108,12 @@ qd_max_z_value = [0 0 0, v_x_maxz v_y_maxz 0]';
 v_x_touch_down = v_x_maxz;
 v_y_touch_down = v_y_maxz;
 v_z_touch_down = -v_z_takeoff;
-q_touchdown_value = [0 0 0, position_x_touch_down, position_y_touch_down, position_z_touch_down]';
-qd_touchdown_value = [0 0 0, v_x_touch_down, v_y_touch_down, v_z_touch_down]';
+omega_yaw_touch_down = omega_yaw_takeoff;
+q_touchdown_value = [0 0 euler_yaw_touch_down, position_x_touch_down, position_y_touch_down, position_z_touch_down]';
+qd_touchdown_value = [0 0 omega_yaw_touch_down, v_x_touch_down, v_y_touch_down, v_z_touch_down]';
 % 
 % 最后时刻的value
-q_final_reference_value  = [0, 0, 0, position_x_final, position_y_final, position_z_init]';
+q_final_reference_value  = [0, 0, euler_yaw_final, position_x_final, position_y_final, position_z_init]';
 qd_final_reference_value = [0 0 0, 0 0 0]';%最终全部速度为0
 
 touchdown_steps = plan_steps - prejump_steps - flight_steps;
@@ -129,10 +166,14 @@ number_of_com_to_foot_vector_R_kstep = size(com_to_foot_vector_world_frame_R_kst
 I3 = eye(3);
 
 rotation_matrix_world_to_robot = rotsb(state_X_kstep(1:3));
+sp = sin(state_X_kstep(2));
+cp = cos(state_X_kstep(2));
 cy = cos(state_X_kstep(3));
 sy = sin(state_X_kstep(3));
-% cp = cos(state_X_kstep(2));
-% sp = sin(state_X_kstep(2));
+
+map_matrix_body_omega_to_world_omega = [cy/cp sy/cp 0;
+    -sy cy 0;
+    cy*sp/cp sy*sp/cp 1];
 
 rotation_matrix_world_to_robot_yaw =[cy sy 0;
         -sy cy 0;
@@ -141,7 +182,7 @@ Ig = rotation_matrix_world_to_robot*robot.Ib*rotation_matrix_world_to_robot';
 Ig_inv=Ig\I3;
 
 % SRBD
-A = [zeros(3) zeros(3) rotation_matrix_world_to_robot_yaw zeros(3)  ;
+A = [zeros(3) zeros(3) map_matrix_body_omega_to_world_omega zeros(3)  ;
      zeros(3) zeros(3) zeros(3) I3 ;
      zeros(3) zeros(3) zeros(3) zeros(3);
      zeros(3) zeros(3) zeros(3) zeros(3) ;
