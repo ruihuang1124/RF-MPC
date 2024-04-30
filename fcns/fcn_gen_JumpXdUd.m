@@ -3,30 +3,73 @@ function [Xd_,Ud_] = fcn_gen_JumpXdUd(p)
 addpath('../arclab-quad-sdk/nmpc_controller/scripts/utils/casadi-windows/')
 import casadi.*
 %% parameters
-
+t_plot = (0:p.simTimeStep:p.plan_time_horizon);
 plan_steps = p.plan_steps;
 plan_time_horizon = p.plan_time_horizon;
 dt_steps = repmat(plan_time_horizon/(plan_steps),1,plan_steps);
+dt = p.simTimeStep;
 max_force_z = 128;
 max_jump_z=0.8; 
-min_position_z=0.15;
-max_jump_speed_z=3.5;
-position_z_init=0.2; 
-position_z_temp = 0.5;
 number_of_legs = 4;
 world.mu=p.mu;
+world.g = p.g;
+min_position_z=0.15;
+max_jump_speed_z=3.5;
+prejump_steps = round((p.prejump_time / p.plan_time_horizon) * plan_steps); 
 
-q_init_value = [0 0 0 0 0 position_z_init]'; % rpy  xyz
+position_z_init=0.2; 
+v_z_init = 0.0;
+position_z_takeoff = position_z_init;
+v_z_takeoff = 0.0;
+position_z_max = 0.5;
+v_z_maxz = 0.0;
+position_z_touch_down = position_z_init;
+v_z_touch_down = 0.0;
+position_z_final = position_z_init;
+v_z_final = 0.0;
+
+position_x_init = 0.0;
+v_x_init = 0.0;
+position_x_takeoff = position_x_init;
+v_x_takeoff = 0.0;
+position_x_touch_down = 0.1;
+v_x_touch_down = 0.0;
+position_x_final = position_x_touch_down;
+v_x_final = 0.0;
+position_x_maxz = (position_x_touch_down - position_x_takeoff)/2;
+v_x_maxz = 0.0;
+
+
+q_init_value = [0 0 0 position_x_init 0 position_z_init]'; % rpy  xyz
 qd_init_value = [0 0 0 0 0 0]';
-q_temp_value = [0 0 0 0 0 position_z_temp]'; % rpy  xyz
-qd_temp_value = [0 0 0 0 0 0]';
-q_final_reference_value  = [1*pi*0, -22/57.3*0, pi*0, 0.0, 0, 0.2]';
-qd_final_reference_value = [0 0 0, 0 0 0]';
 
-contact_states_value = [repmat([1 1 1 1]', 1, plan_steps * 0.375) ...
-    repmat([1 1 1 1]', 1, plan_steps * 0.125)  ...
-    repmat([0 0 0 0]', 1, plan_steps * 0.475) ...
-    repmat([1 1 1 1]', 1, plan_steps * 0.025)]'; % predefined 
+% 根据最高点z值以及降落点x值计算抛物线，确定takeoff起飞时候和tauchdown降落时候的状态
+% 根据抛物线先确定takeoff的value
+v_z_takeoff = sqrt(2*world.g * (position_z_max - position_z_takeoff));
+t_flight = 2*v_z_takeoff/world.g;
+flight_steps = round((t_flight / p.plan_time_horizon) * plan_steps);
+v_x_takeoff = (position_x_touch_down - position_x_takeoff) * world.g / (2*v_z_takeoff);
+qd_takeoff_value = [0 0 0, v_x_takeoff, 0, v_z_takeoff]';
+q_takeoff_value = [0 0 0, position_x_takeoff, 0, position_z_takeoff]';
+% 抛物线最高点value；
+v_x_maxz = v_x_takeoff;
+q_max_z_value = [0 0 0, position_x_maxz 0 position_z_max]'; % rpy  xyz
+qd_max_z_value = [0 0 0, v_x_maxz 0 0]';
+% 触地时刻的value，主要是速度，z向有重力加速度，x向则无加速度
+v_x_touch_down = v_x_maxz;
+v_z_touch_down = -v_z_takeoff;
+q_touchdown_value = [0 0 0, position_x_touch_down, 0, position_z_touch_down]';
+qd_touchdown_value = [0 0 0, v_x_touch_down, 0, v_z_touch_down]';
+% 
+% 最后时刻的value
+q_final_reference_value  = [0, 0, 0, position_x_final, 0, position_z_init]';
+qd_final_reference_value = [0 0 0, 0 0 0]';%最终全部速度为0
+
+touchdown_steps = plan_steps - prejump_steps - flight_steps;
+% predefine carefully:
+contact_states_value = [repmat([1 1 1 1]', 1, prejump_steps)  ... % 1: init--->takeoff
+    repmat([0 0 0 0]', 1, flight_steps) ...  % 2: takeoff--->touchdown.
+    repmat([1 1 1 1]', 1, touchdown_steps)]'; % 3: touchdown--->final 
 
 weight.Q_states = [10 10 10, 10 10 10, 10 10 10, 10 10 10 ]'; 
 weight.Q_final_state = [10 10 10, 50 50 150, 10 10 10, 10 10 100 ]';
@@ -43,7 +86,6 @@ com_to_foot_vector_z_robot_frame_init=[0,         0,          0,          0;
              -position_z_init,   -position_z_init,   -position_z_init,    -position_z_init];
 foot_pose_under_robot_frame_init=robot.hipPos+com_to_foot_vector_z_robot_frame_init;
 foot_position_swing_under_robot_frame=reshape(foot_pose_under_robot_frame_init,[],1);
-world.g = 9.8;
 mu_inv = 1.0/world.mu;
 frition_cone =[ mu_inv, 0,  -1.0;
           -mu_inv, 0,  -1.0;
@@ -52,7 +94,7 @@ frition_cone =[ mu_inv, 0,  -1.0;
 
 kinematic_box_x = 0.15; 
 kinematic_box_y = 0.15;
-kinematic_box_z = 0.3; 
+kinematic_box_z = 0.25; 
 
 kinematic_block =[ 1, 0,  0,-kinematic_box_x; % under hip frame
             -1, 0,  0,-kinematic_box_x;
@@ -99,9 +141,9 @@ B = [ zeros(3)           zeros(3)           zeros(3)            zeros(3);
     Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(1:3)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(4:6)) Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(7:9))  Ig_inv*Skew(com_to_foot_vector_world_frame_R_kstep(10:12));
     I3/robot.m   I3/robot.m   I3/robot.m    I3/robot.m;];
 
-g = zeros(12,1);
-g(12) = -world.g;
-dot_state_X = A*state_X_kstep+B*control_inputs_U_kstep+g; % Constructing symbolic equations for differential dynamics
+g_vector = zeros(12,1);
+g_vector(12) = -world.g;
+dot_state_X = A*state_X_kstep+B*control_inputs_U_kstep+g_vector; % Constructing symbolic equations for differential dynamics
 
 system_dynamic = Function('system_dynamic',{state_X_kstep; control_inputs_U_kstep; com_to_foot_vector_world_frame_R_kstep},{dot_state_X},{'input_states','control_inputs','foot_input'},{'dotX'});
 
@@ -233,39 +275,40 @@ LBp=repmat(LBp,plan_steps,1);
 args.lbx=[args.lbx;LBx;LBf;LBp];
 
 % Construct a reference trajectory for a jump
-c_ref = diag([1 1 1, 1 -1 1, -1 1 1, -1 -1 1])*repmat([0.15 0.094 -position_z_init],1,4)'; % 初始化足端位置
+% 起始站姿作为参考的 在世界坐标系下表示的 从com--feet的向量
+com_to_foot_vector_under_world_frame_ref = diag([1 1 1, 1 -1 1, -1 1 1, -1 -1 1])*repmat([0.15 0.094 -position_z_init],1,4)'; % 初始化足端位置
+
 f_ref = zeros(12,1);
 % set parameter values 设定期望运动轨迹
-for i = 1:6 % 对状态线性插值
-    Xref_val(i,:) = linspace(q_init_value(i),q_final_reference_value(i),plan_steps+1); % 决定轨迹末端位置
-    Xref_val(6+i,:) = linspace(qd_init_value(i),qd_final_reference_value(i),plan_steps+1);
+
+
+for i = 1:6 % 对状态进行插值
+    %首先是prejump的阶段，这时完全是触地的，主要生成takeoff 时候的期望速度
+    Xref_val(i,1:prejump_steps) = linspace(q_init_value(i),q_takeoff_value(i),prejump_steps); %
+    Xref_val(6+i,1:prejump_steps) = linspace(qd_init_value(i),qd_takeoff_value(i),prejump_steps);
+    %然后是飞行阶段，这时完全是腾空的，全由takeoff的状态和重力加速度g决定,先线性插值，后面对z方向单独进行处理
+    Xref_val(i,prejump_steps+1:prejump_steps + flight_steps) = linspace(q_takeoff_value(i),q_touchdown_value(i),flight_steps);
+    Xref_val(6+i,prejump_steps+1:prejump_steps + flight_steps) = linspace(qd_takeoff_value(i),qd_touchdown_value(i),flight_steps);
+    %最后是触地阶段，这时完全是触地的，主要前往最终的期望姿态即稳定在速度和加速度均为0的状态；
+    Xref_val(i,prejump_steps+flight_steps+1:plan_steps+1) = linspace(q_touchdown_value(i),q_final_reference_value(i),plan_steps + 1 - prejump_steps - flight_steps);
+    Xref_val(6+i,prejump_steps+flight_steps+1:plan_steps+1) = linspace(qd_touchdown_value(i),qd_final_reference_value(i),plan_steps + 1 - prejump_steps - flight_steps);
 end
-% Z向抛物线
-a = [Xref_val(4,1),Xref_val(4,plan_steps/2),Xref_val(4,plan_steps)]; % x
-b = [q_init_value(6),q_final_reference_value(6),q_init_value(6)+0.0]; % z
-% Xref_val(6,:) = interp1(a,b,Xref_val(4,:),'spline'); % 高度方向做Spline插值
-Uref_val = zeros(24,plan_steps);
+% 飞行阶段Z向抛物线,插值速度以及位置
+for step = (prejump_steps + 1) : (prejump_steps + flight_steps)
+    Xref_val(12,step) = v_z_takeoff - world.g * dt * (step - prejump_steps); % v = v_0 - gt
+    Xref_val(6,step) = position_z_takeoff + v_z_takeoff *  dt * (step - prejump_steps) - 0.5 * world.g *  (dt * (step - prejump_steps))^2; % h = h_init + v_0 - 0.5gt^2;
+end
+
+Uref_val = zeros(24,plan_steps); %12 feet_position_under_world_frame & 12 force;
 r_ref = zeros(12,plan_steps);
 for leg = 1:4
     for xyz = 1:3
-        Uref_val(3*(leg-1)+xyz,:) = Xref_val(xyz+3,1:end-1) + c_ref(3*(leg-1)+xyz); % position of feet
-        r_ref(3*(leg-1)+xyz,:) = c_ref(3*(leg-1)+xyz); %
+        Uref_val(3*(leg-1)+xyz,:) = Xref_val(xyz+3,1:end-1) + com_to_foot_vector_under_world_frame_ref(3*(leg-1)+xyz); % position of feet
+        r_ref(3*(leg-1)+xyz,:) = com_to_foot_vector_under_world_frame_ref(3*(leg-1)+xyz); % reference com_to_foot_vector_under_world_frame;
         Uref_val(12+3*(leg-1)+xyz,:) = f_ref(xyz).*ones(1,plan_steps); % force of feet
     end
 end
 
-if(1) % 线性插值
-    for i = 1:6
-        Xref_val(i,:) = linspace(q_init_value(i), q_final_reference_value(i), plan_steps + 1);
-        Xref_val(6+i,:) = linspace(qd_init_value(i), qd_final_reference_value(i), plan_steps + 1);
-    end
-    for leg = 1:4
-        for xyz = 1:3
-            Uref_val(3*(leg-1)+xyz,:)    = Xref_val(xyz,1:end-1) + c_ref(3*(leg-1)+xyz);
-            Uref_val(12+3*(leg-1)+xyz,:) = f_ref(xyz).*ones(1,plan_steps);
-        end
-    end
-end
 F_ref=Uref_val(13:24,:);
 
 args.p=[reshape(Xref_val,number_of_states*(plan_steps+1),1);reshape(F_ref,number_of_control_inputs*plan_steps,1);reshape(r_ref,number_of_com_to_foot_vector_R_kstep*plan_steps,1);reshape(contact_states_value',4*plan_steps,1)];%送入了轨迹约束 相序约束
@@ -283,42 +326,52 @@ r_li=sol.x(number_of_states*(plan_steps+1)+number_of_control_inputs*plan_steps+1
 r_li=reshape(full(r_li),number_of_control_inputs,plan_steps); % com_to_foot_world_frame
 p_li=r_li+repmat(x_li(4:6,1:end-1),4,1); % foot_position_world_frame
 
-figure(10);
-subplot(2,1,1)
-plot(x_li(6,:));grid on;
-subplot(2,1,2)
-plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
+% figure(10);
+% subplot(2,1,1)
+% plot(x_li(6,:),Xref_val(6,:));grid on;
+% subplot(2,1,2)
+% plot(x_li(4,:));grid on;%  RPY XYZ  DRPY DXYZ
+% 
+% 
+% figure(11);
+% subplot(4,1,1)
+% plot(f_li(3,:));%
+% hold on; grid on;
+% subplot(4,1,2)
+% plot(f_li(6,:));%
+% hold on; grid on;
+% subplot(4,1,3)
+% plot(f_li(9,:));%
+% hold on; grid on;
+% subplot(4,1,4)
+% plot(f_li(12,:));%
+% grid on;
+% 
+% figure(12);
+% subplot(4,1,1)
+% plot(f_li(1,:));%
+% hold on; grid on;
+% subplot(4,1,2)
+% plot(f_li(4,:));%
+% hold on; grid on;
+% subplot(4,1,3)
+% plot(f_li(7,:));
+% hold on; grid on;
+% subplot(4,1,4)
+% plot(f_li(10,:));
+% grid on;
 
 
-figure(11);
-subplot(4,1,1)
-plot(f_li(3,:));%
-hold on; grid on;
-subplot(4,1,2)
-plot(f_li(6,:));%
-hold on; grid on;
-subplot(4,1,3)
-plot(f_li(9,:));%
-hold on; grid on;
-subplot(4,1,4)
-plot(f_li(12,:));%
-grid on;
+figure(11)
+plot(t_plot,Xref_val(6,:),'r--',...
+    t_plot,x_li(6,:),'r',...
+    t_plot,Xref_val(4,:),'b--',...
+    t_plot,x_li(4,:),'b',...
+    'linewidth',1);
+xlabel('t(s)') 
+ylabel('value(m)')
+title('reference & optimized z position')
 
-figure(12);
-subplot(4,1,1)
-plot(f_li(1,:));%
-hold on; grid on;
-subplot(4,1,2)
-plot(f_li(4,:));%
-hold on; grid on;
-subplot(4,1,3)
-plot(f_li(7,:));
-hold on; grid on;
-subplot(4,1,4)
-plot(f_li(10,:));
-grid on;
-
-figure(13);
 pic_num = 1;%保存gif用
 time=['NLP','_',datestr(datetime('now'),'yyyy-mm-dd-HH-MM'),'_Animated.gif'];
 for i=1:plan_steps

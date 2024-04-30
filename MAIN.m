@@ -26,7 +26,7 @@ use_qpSWIFT = 1;        % 0 - quadprog, 1 - qpSWIFT (external)
 optimal_jump = 1;
 
 dt_sim = p.simTimeStep;
-SimTimeDuration = 4.8;  % [sec]
+SimTimeDuration = 2.8;  % [sec]
 MAX_ITER = floor(SimTimeDuration/p.simTimeStep);
 
 % desired trajectory
