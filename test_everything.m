@@ -12,3 +12,8 @@ test_c = [ 1 -0.381773   1.30117;
     1.30117         1 -0.381773;
     -0.381773   1.30117         1]
 logm_test_c = logm(test_c)
+
+yaw_d = 3.14;
+ea_d = [0;0;yaw_d];
+expm(hatMap(ea_d))
+vR_d = reshape(expm(hatMap(ea_d)),[9,1])
