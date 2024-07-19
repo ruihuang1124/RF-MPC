@@ -216,6 +216,7 @@ Ud;
 [HH,gg,Aineqq,bineqq,Aeqq,beqq] = fcn_get_QP_form_eta(Xt,Ut,Xd,Ud,p);
 % HH,gg,Aineqq,bineqq,Aeqq,beqq
 [zval,basic_info] = qpSWIFT(sparse(HH),gg,sparse(Aeqq),beqq,sparse(Aineqq),bineqq);
+basic_info
 zval(1:12)
 
 
